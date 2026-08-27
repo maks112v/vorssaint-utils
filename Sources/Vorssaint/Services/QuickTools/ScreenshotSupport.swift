@@ -700,6 +700,18 @@ enum ScreenshotSupport {
         case bottomRight
     }
 
+    /// Removes the letterboxing around an idle quick preview while keeping the
+    /// same maximum image area used by its expanded controls.
+    static func quickPreviewImageSize(imageSize: CGSize,
+                                      maximumSize: CGSize = CGSize(width: 320, height: 138)) -> CGSize {
+        guard imageSize.width > 0, imageSize.height > 0,
+              maximumSize.width > 0, maximumSize.height > 0 else { return .zero }
+        let scale = min(maximumSize.width / imageSize.width,
+                        maximumSize.height / imageSize.height)
+        return CGSize(width: imageSize.width * scale,
+                      height: imageSize.height * scale)
+    }
+
     /// Picks the display containing most of the capture. The pointer breaks
     /// an exact tie and is also the fallback when a display was disconnected
     /// or rearranged before the preview appears.

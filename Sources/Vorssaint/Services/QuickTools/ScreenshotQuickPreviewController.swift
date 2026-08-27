@@ -42,6 +42,7 @@ final class ScreenshotQuickPreviewController {
     private var keyMonitor: Any?
     private var dismissWork: DispatchWorkItem?
     private var autoDismissDuration: TimeInterval = 12
+    private var expanded = false
     private var closed = false
 
     var protectedWindowIDs: Set<CGWindowID> {
@@ -85,12 +86,14 @@ final class ScreenshotQuickPreviewController {
                 if inside {
                     self?.dismissWork?.cancel()
                     self?.dismissWork = nil
+                    self?.setExpanded(true)
                 } else {
+                    self?.setExpanded(false)
                     self?.scheduleAutoDismiss()
                 }
             })
         let host = NSHostingController(rootView: content)
-        let size = Self.size(showingLink: false)
+        let size = Self.compactSize(for: capture.image)
         let panel = ScreenshotQuickPreviewPanel(
             contentRect: CGRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel],
@@ -286,6 +289,25 @@ final class ScreenshotQuickPreviewController {
         CGSize(width: 350, height: showingLink ? 268 : 210)
     }
 
+    fileprivate static var imageCanvasSize: CGSize {
+        CGSize(width: 320, height: 138)
+    }
+
+    fileprivate static func compactSize(for image: CGImage) -> CGSize {
+        ScreenshotSupport.quickPreviewImageSize(
+            imageSize: CGSize(width: image.width, height: image.height),
+            maximumSize: imageCanvasSize)
+    }
+
+    /// The expanded layout keeps the image inside its original 320 × 138
+    /// canvas. Tracking the real image edge makes the controls unfold around
+    /// the thumbnail instead of making it jump under the pointer.
+    private static func imageTopInset(expanded: Bool, image: CGImage) -> CGFloat {
+        guard expanded else { return 0 }
+        let imageHeight = compactSize(for: image).height
+        return 10 + (imageCanvasSize.height - imageHeight) / 2
+    }
+
     private func previewFrame(for size: CGSize) -> CGRect {
         let pointer = NSEvent.mouseLocation
         let screens = NSScreen.screens.map { (frame: $0.frame, visibleFrame: $0.visibleFrame) }
@@ -314,9 +336,44 @@ final class ScreenshotQuickPreviewController {
     }
 
     private func resizePanel(showingLink: Bool) {
-        panel?.setFrame(previewFrame(for: Self.size(showingLink: showingLink)),
-                        display: true,
-                        animate: true)
+        resizePanel(expanded: expanded, showingLink: showingLink)
+    }
+
+    private func setExpanded(_ shouldExpand: Bool) {
+        guard shouldExpand != expanded else { return }
+        resizePanel(expanded: shouldExpand, showingLink: model.sharedRecord != nil)
+    }
+
+    private func resizePanel(expanded shouldExpand: Bool, showingLink: Bool) {
+        guard let panel else { return }
+        let currentImageTop = panel.frame.maxY
+            - Self.imageTopInset(expanded: expanded, image: capture.image)
+        let size = shouldExpand
+            ? Self.size(showingLink: showingLink)
+            : Self.compactSize(for: capture.image)
+        let newImageTopInset = Self.imageTopInset(expanded: shouldExpand, image: capture.image)
+        var frame = CGRect(x: panel.frame.midX - size.width / 2,
+                           y: currentImageTop + newImageTopInset - size.height,
+                           width: size.width,
+                           height: size.height)
+
+        let pointer = NSEvent.mouseLocation
+        let screens = NSScreen.screens.map { (frame: $0.frame, visibleFrame: $0.visibleFrame) }
+        let visibleFrame = ScreenshotSupport.quickPreviewVisibleFrame(
+            anchor: capture.anchorRect,
+            pointer: pointer,
+            screens: screens,
+            fallback: NSScreen.pointerVisibleFrame)
+        let usable = visibleFrame.insetBy(dx: 10, dy: 10)
+        frame.origin.x = min(max(frame.minX, usable.minX),
+                             max(usable.minX, usable.maxX - frame.width))
+        frame.origin.y = min(max(frame.minY, usable.minY),
+                             max(usable.minY, usable.maxY - frame.height))
+
+        expanded = shouldExpand
+        panel.setFrame(frame,
+                       display: true,
+                       animate: !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
     }
 
     private func scheduleAutoDismiss() {
@@ -385,29 +442,35 @@ private struct ScreenshotQuickPreviewView: View {
     let showQR: () -> Void
     let hoverChanged: (Bool) -> Void
     @AppStorage(DefaultsKey.screenshotSharingEnabled) private var sharingEnabled = true
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var isHovered = false
 
     var body: some View {
-        VStack(spacing: 10) {
-            Button {
-                perform(.edit)
-            } label: {
-                Image(decorative: image, scale: 1)
-                    .resizable()
-                    .interpolation(.high)
-                    .scaledToFit()
-                    .frame(maxWidth: 320, maxHeight: 138)
-                    .frame(width: 320, height: 138)
-                    .background(Color.black.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 9, style: .continuous)
-                            .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-                    )
+        Group {
+            if isHovered {
+                expandedPreview
+                    .transition(.opacity)
+            } else {
+                previewButton(expanded: false)
+                    .transition(.opacity)
             }
-            .buttonStyle(.plain)
-            .onDrag(dragItem)
-            .screenshotSafeHelp(strings.editButton)
-            .accessibilityLabel(strings.editButton)
+        }
+        .onHover { inside in
+            guard inside != isHovered else { return }
+            if reduceMotion {
+                isHovered = inside
+            } else {
+                withAnimation(.easeOut(duration: 0.16)) {
+                    isHovered = inside
+                }
+            }
+            hoverChanged(inside)
+        }
+    }
+
+    private var expandedPreview: some View {
+        VStack(spacing: 10) {
+            previewButton(expanded: true)
 
             if let record = model.sharedRecord {
                 sharedLinkRow(record)
@@ -456,14 +519,42 @@ private struct ScreenshotQuickPreviewView: View {
         .padding(10)
         .frame(width: ScreenshotQuickPreviewController.size(showingLink: false).width,
                height: ScreenshotQuickPreviewController.size(
-                   showingLink: model.sharedRecord != nil).height)
+                   showingLink: model.sharedRecord != nil).height,
+               alignment: .top)
         .background(.regularMaterial,
                     in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .strokeBorder(Color.primary.opacity(0.10), lineWidth: 1)
         )
-        .onHover(perform: hoverChanged)
+    }
+
+    private func previewButton(expanded: Bool) -> some View {
+        let compactSize = ScreenshotQuickPreviewController.compactSize(for: image)
+        let frameSize = expanded ? ScreenshotQuickPreviewController.imageCanvasSize : compactSize
+        return Button {
+            perform(.edit)
+        } label: {
+            Image(decorative: image, scale: 1)
+                .resizable()
+                .interpolation(.high)
+                .scaledToFit()
+                .frame(width: frameSize.width, height: frameSize.height)
+                .background {
+                    if expanded {
+                        Color.black.opacity(0.12)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .onDrag(dragItem)
+        .screenshotSafeHelp(strings.editButton)
+        .accessibilityLabel(strings.editButton)
     }
 
     private func sharedLinkRow(_ record: ScreenshotShareRecord) -> some View {

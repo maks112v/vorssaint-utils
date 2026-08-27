@@ -13567,6 +13567,18 @@ struct MetricsTests {
             position: .bottomRight)
         expect(cornerFrame == CGRect(x: 1114, y: 16, width: 310, height: 210),
                "the after-capture confirmation sits inset in the bottom-right corner")
+        let widePreviewImage = ScreenshotSupport.quickPreviewImageSize(
+            imageSize: CGSize(width: 1600, height: 900))
+        let tallPreviewImage = ScreenshotSupport.quickPreviewImageSize(
+            imageSize: CGSize(width: 900, height: 1600))
+        expectClose(Double(widePreviewImage.width), 245.3333,
+                    "idle screenshot preview fits a wide image without letterboxing")
+        expectClose(Double(widePreviewImage.height), 138,
+                    "idle screenshot preview uses the full image height")
+        expectClose(Double(tallPreviewImage.width), 77.625,
+                    "idle screenshot preview preserves a tall image aspect ratio")
+        expectClose(Double(tallPreviewImage.height), 138,
+                    "idle screenshot preview caps tall images at the preview height")
         let previewSize = CGSize(width: 310, height: 210)
         let previewScreen = CGRect(x: -1920, y: 50, width: 1440, height: 900)
         func configuredPreviewFrame(_ position: ScreenshotSupport.QuickPreviewPosition) -> CGRect {
