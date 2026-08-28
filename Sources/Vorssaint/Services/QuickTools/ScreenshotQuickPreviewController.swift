@@ -346,16 +346,9 @@ final class ScreenshotQuickPreviewController {
 
     private func resizePanel(expanded shouldExpand: Bool, showingLink: Bool) {
         guard let panel else { return }
-        let currentImageTop = panel.frame.maxY
-            - Self.imageTopInset(expanded: expanded, image: capture.image)
         let size = shouldExpand
             ? Self.size(showingLink: showingLink)
             : Self.compactSize(for: capture.image)
-        let newImageTopInset = Self.imageTopInset(expanded: shouldExpand, image: capture.image)
-        var frame = CGRect(x: panel.frame.midX - size.width / 2,
-                           y: currentImageTop + newImageTopInset - size.height,
-                           width: size.width,
-                           height: size.height)
 
         let pointer = NSEvent.mouseLocation
         let screens = NSScreen.screens.map { (frame: $0.frame, visibleFrame: $0.visibleFrame) }
@@ -364,11 +357,14 @@ final class ScreenshotQuickPreviewController {
             pointer: pointer,
             screens: screens,
             fallback: NSScreen.pointerVisibleFrame)
-        let usable = visibleFrame.insetBy(dx: 10, dy: 10)
-        frame.origin.x = min(max(frame.minX, usable.minX),
-                             max(usable.minX, usable.maxX - frame.width))
-        frame.origin.y = min(max(frame.minY, usable.minY),
-                             max(usable.minY, usable.maxY - frame.height))
+        let frame = ScreenshotSupport.quickPreviewTransitionFrame(
+            expanding: shouldExpand,
+            restingFrame: previewFrame(for: Self.compactSize(for: capture.image)),
+            currentFrame: panel.frame,
+            currentImageTopInset: Self.imageTopInset(expanded: expanded, image: capture.image),
+            size: size,
+            imageTopInset: Self.imageTopInset(expanded: shouldExpand, image: capture.image),
+            visibleFrame: visibleFrame)
 
         expanded = shouldExpand
         panel.setFrame(frame,

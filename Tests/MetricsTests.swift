@@ -13579,6 +13579,32 @@ struct MetricsTests {
                     "idle screenshot preview preserves a tall image aspect ratio")
         expectClose(Double(tallPreviewImage.height), 138,
                     "idle screenshot preview caps tall images at the preview height")
+        let hoverScreen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let compactPreviewSize = CGSize(width: 245.3333333333, height: 138)
+        let restingPreviewFrame = ScreenshotSupport.quickPreviewFrame(
+            size: compactPreviewSize,
+            anchor: .zero,
+            pointer: .zero,
+            visibleFrame: hoverScreen,
+            position: .bottomRight)
+        let expandedPreviewFrame = ScreenshotSupport.quickPreviewTransitionFrame(
+            expanding: true,
+            restingFrame: restingPreviewFrame,
+            currentFrame: restingPreviewFrame,
+            currentImageTopInset: 0,
+            size: CGSize(width: 350, height: 210),
+            imageTopInset: 10,
+            visibleFrame: hoverScreen)
+        let collapsedPreviewFrame = ScreenshotSupport.quickPreviewTransitionFrame(
+            expanding: false,
+            restingFrame: restingPreviewFrame,
+            currentFrame: expandedPreviewFrame,
+            currentImageTopInset: 10,
+            size: compactPreviewSize,
+            imageTopInset: 0,
+            visibleFrame: hoverScreen)
+        expect(collapsedPreviewFrame == restingPreviewFrame,
+               "a bottom-corner preview returns to its configured position after hover")
         let previewSize = CGSize(width: 310, height: 210)
         let previewScreen = CGRect(x: -1920, y: 50, width: 1440, height: 900)
         func configuredPreviewFrame(_ position: ScreenshotSupport.QuickPreviewPosition) -> CGRect {

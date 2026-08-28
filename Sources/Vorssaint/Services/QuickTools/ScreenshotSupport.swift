@@ -712,6 +712,30 @@ enum ScreenshotSupport {
                       height: imageSize.height * scale)
     }
 
+    /// Expands around the image already on screen. Collapse returns to the
+    /// placement calculated from Settings instead of treating a clamped
+    /// expanded panel as the preview's new home.
+    static func quickPreviewTransitionFrame(expanding: Bool,
+                                            restingFrame: CGRect,
+                                            currentFrame: CGRect,
+                                            currentImageTopInset: CGFloat,
+                                            size: CGSize,
+                                            imageTopInset: CGFloat,
+                                            visibleFrame: CGRect) -> CGRect {
+        guard expanding else { return restingFrame }
+        let currentImageTop = currentFrame.maxY - currentImageTopInset
+        var frame = CGRect(x: currentFrame.midX - size.width / 2,
+                           y: currentImageTop + imageTopInset - size.height,
+                           width: size.width,
+                           height: size.height)
+        let usable = visibleFrame.insetBy(dx: 10, dy: 10)
+        frame.origin.x = min(max(frame.minX, usable.minX),
+                             max(usable.minX, usable.maxX - frame.width))
+        frame.origin.y = min(max(frame.minY, usable.minY),
+                             max(usable.minY, usable.maxY - frame.height))
+        return frame
+    }
+
     /// Picks the display containing most of the capture. The pointer breaks
     /// an exact tie and is also the fallback when a display was disconnected
     /// or rearranged before the preview appears.
