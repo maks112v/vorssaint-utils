@@ -512,6 +512,7 @@ enum DefaultsKey {
     static let screenshotOpenEditorDirectly = "screenshotOpenEditorDirectly"
     static let screenshotCopyToClipboard = "screenshotCopyToClipboard"
     static let screenshotPreviewPosition = "screenshotPreviewPosition"
+    static let screenshotPreviewDismissal = "screenshotPreviewDismissal"
     static let screenshotSharingEnabled = "screenshotSharingEnabled"
     // Developer-only endpoint for an isolated test tunnel. The official app
     // ignores it, and settings backups must never carry it to another Mac.
@@ -1211,6 +1212,7 @@ enum Defaults {
         DefaultsKey.screenshotOpenEditorDirectly: false,
         DefaultsKey.screenshotCopyToClipboard: false,
         DefaultsKey.screenshotPreviewPosition: ScreenshotSupport.QuickPreviewPosition.automatic.rawValue,
+        DefaultsKey.screenshotPreviewDismissal: ScreenshotSupport.QuickPreviewDismissal.standard.rawValue,
         DefaultsKey.screenshotSharingEnabled: true,
         DefaultsKey.panelUtilityScreenshot: true,
         DefaultsKey.windowLayoutShortcutsEnabled: false,
